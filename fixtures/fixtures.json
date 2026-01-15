@@ -1,0 +1,92 @@
+[
+  {
+    "id": "epl_2025_01_18_arsenal_liverpool",
+    "sport": "Football",
+    "league": "English Premier League",
+    "team1": "Arsenal",
+    "team2": "Liverpool",
+    "date": "2025-01-18T15:00:00Z",
+    "resolution_url": "https://www.bbc.com/sport/football/scores-fixtures/2025-01-18"
+  },
+  {
+    "id": "epl_2025_01_18_chelsea_man_city",
+    "sport": "Football",
+    "league": "English Premier League",
+    "team1": "Chelsea",
+    "team2": "Manchester City",
+    "date": "2025-01-18T17:30:00Z",
+    "resolution_url": "https://www.bbc.com/sport/football/scores-fixtures/2025-01-18"
+  },
+  {
+    "id": "epl_2025_01_19_man_united_tottenham",
+    "sport": "Football",
+    "league": "English Premier League",
+    "team1": "Manchester United",
+    "team2": "Tottenham",
+    "date": "2025-01-19T14:00:00Z",
+    "resolution_url": "https://www.bbc.com/sport/football/scores-fixtures/2025-01-19"
+  },
+  {
+    "id": "laliga_2025_01_18_real_madrid_barcelona",
+    "sport": "Football",
+    "league": "La Liga",
+    "team1": "Real Madrid",
+    "team2": "Barcelona",
+    "date": "2025-01-18T20:00:00Z",
+    "resolution_url": "https://www.bbc.com/sport/football/scores-fixtures/2025-01-18"
+  },
+  {
+    "id": "bundesliga_2025_01_19_bayern_dortmund",
+    "sport": "Football",
+    "league": "Bundesliga",
+    "team1": "Bayern Munich",
+    "team2": "Borussia Dortmund",
+    "date": "2025-01-19T17:30:00Z",
+    "resolution_url": "https://www.bbc.com/sport/football/scores-fixtures/2025-01-19"
+  },
+  {
+    "id": "seriea_2025_01_20_juventus_inter",
+    "sport": "Football",
+    "league": "Serie A",
+    "team1": "Juventus",
+    "team2": "Inter Milan",
+    "date": "2025-01-20T19:45:00Z",
+    "resolution_url": "https://www.bbc.com/sport/football/scores-fixtures/2025-01-20"
+  },
+  {
+    "id": "epl_2025_01_25_newcastle_brighton",
+    "sport": "Football",
+    "league": "English Premier League",
+    "team1": "Newcastle",
+    "team2": "Brighton",
+    "date": "2025-01-25T15:00:00Z",
+    "resolution_url": "https://www.bbc.com/sport/football/scores-fixtures/2025-01-25"
+  },
+  {
+    "id": "epl_2025_01_25_aston_villa_west_ham",
+    "sport": "Football",
+    "league": "English Premier League",
+    "team1": "Aston Villa",
+    "team2": "West Ham",
+    "date": "2025-01-25T12:30:00Z",
+    "resolution_url": "https://www.bbc.com/sport/football/scores-fixtures/2025-01-25"
+  },
+  {
+    "id": "laliga_2025_01_26_atletico_sevilla",
+    "sport": "Football",
+    "league": "La Liga",
+    "team1": "Atletico Madrid",
+    "team2": "Sevilla",
+    "date": "2025-01-26T16:15:00Z",
+    "resolution_url": "https://www.bbc.com/sport/football/scores-fixtures/2025-01-26"
+  },
+  {
+    "id": "ligue1_2025_01_26_psg_marseille",
+    "sport": "Football",
+    "league": "Ligue 1",
+    "team1": "PSG",
+    "team2": "Marseille",
+    "date": "2025-01-26T20:45:00Z",
+    "resolution_url": "https://www.bbc.com/sport/football/scores-fixtures/2025-01-26"
+  }
+]
