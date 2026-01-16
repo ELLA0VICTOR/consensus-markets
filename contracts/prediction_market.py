@@ -1,6 +1,7 @@
 # { "Depends": "py-genlayer:test" }
 
 from genlayer import *
+from dataclasses import dataclass
 import json
 import typing
 
@@ -167,8 +168,9 @@ The output must be valid JSON parsable by json.loads()."""
             odds_team2 = "2.00"
         
         # Create market
+        current_market_id = self.next_market_id
         market = Market(
-            id=self.next_market_id,
+            id=current_market_id,
             creator=creator,
             team1=team1,
             team2=team2,
@@ -184,10 +186,10 @@ The output must be valid JSON parsable by json.loads()."""
             created_at=u256(gl.block.number)
         )
         
-        self.markets[self.next_market_id] = market
+        self.markets[current_market_id] = market
         
         # Initialize empty bet array for this market
-        self.bets[self.next_market_id] = gl.storage.inmem_allocate(DynArray[Bet])
+        self.bets[current_market_id] = gl.storage.inmem_allocate(DynArray[Bet])
         
         self.next_market_id += 1
     
