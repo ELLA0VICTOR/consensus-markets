@@ -1,8 +1,16 @@
+// src/hooks/useContract.js
 import { useState, useEffect, useCallback } from 'react';
 import { createClient } from 'genlayer-js';
-import { studionet } from 'genlayer-js/chains'; // ✅ FIXED: Using studionet for GenLayer Studio
+import { studionet } from 'genlayer-js/chains';
 import { CONTRACT_ADDRESS } from '../config/genlayer';
 import { useWallet } from '../contexts/WalletContext';
+import { 
+  convertGenLayerData, 
+  convertMarket, 
+  convertBet, 
+  convertDispute,
+  formatAddressForContract 
+} from '../utils/genlayerUtils';
 
 export function useContract() {
   const { account, isConnected: walletConnected, walletType } = useWallet();
@@ -25,16 +33,15 @@ export function useContract() {
         
         if (walletType === 'metamask') {
           // For MetaMask, we need to use the browser's provider
-          // GenLayerJS will handle MetaMask signing automatically
           cli = createClient({
-            chain: studionet, // ✅ FIXED: Using studionet for GenLayer Studio
-            account: account.address, // Just pass the address for MetaMask
+            chain: studionet,
+            account: account.address,
           });
         } else {
           // For auto-generated accounts, use the full account object with private key
           cli = createClient({
-            chain: studionet, // ✅ FIXED: Using studionet for GenLayer Studio
-            account: account, // Full account object with private key
+            chain: studionet,
+            account: account,
           });
         }
         
@@ -50,7 +57,7 @@ export function useContract() {
     initClient();
   }, [account, walletType]);
 
-  // Read contract method
+  // Read contract method with automatic data conversion
   const readContract = useCallback(async (functionName, args = []) => {
     if (!client) {
       throw new Error('Client not initialized');
@@ -62,7 +69,11 @@ export function useContract() {
         functionName,
         args,
       });
-      return result;
+      
+      // Convert GenLayer data structures to plain objects
+      const converted = convertGenLayerData(result);
+      
+      return converted;
     } catch (err) {
       console.error(`Error reading ${functionName}:`, err);
       throw err;
@@ -92,8 +103,8 @@ export function useContract() {
       const receipt = await client.waitForTransactionReceipt({
         hash,
         status: 'FINALIZED',
-        interval: 5000, // Check every 5 seconds
-        retries: 30,    // Try for up to 2.5 minutes (30 * 5s = 150s)
+        interval: 5000,
+        retries: 30,
       });
 
       setIsLoading(false);
@@ -106,29 +117,46 @@ export function useContract() {
     }
   }, [client]);
 
-  // Specific contract methods
-  const getMarket = useCallback((marketId) => {
-    return readContract('get_market', [marketId]);
+  // Specific contract methods with proper conversions
+  const getMarket = useCallback(async (marketId) => {
+    const result = await readContract('get_market', [marketId]);
+    return convertMarket(result);
   }, [readContract]);
 
-  const getUserBalance = useCallback((address) => {
-    return readContract('get_user_balance', [address]);
+  const getUserBalance = useCallback(async (address) => {
+    // Format address properly for contract
+    const formattedAddress = formatAddressForContract(address);
+    const result = await readContract('get_user_balance', [formattedAddress]);
+    // Result is already converted by readContract, just ensure it's a number
+    return Number(result);
   }, [readContract]);
 
-  const getMarketBets = useCallback((marketId) => {
-    return readContract('get_market_bets', [marketId]);
+  const getMarketBets = useCallback(async (marketId) => {
+    const result = await readContract('get_market_bets', [marketId]);
+    // Result is an array of bets
+    if (Array.isArray(result)) {
+      return result.map(bet => convertBet(bet));
+    }
+    return [];
   }, [readContract]);
 
-  const getUserBets = useCallback((address) => {
-    return readContract('get_user_bets', [address]);
+  const getUserBets = useCallback(async (address) => {
+    const formattedAddress = formatAddressForContract(address);
+    const result = await readContract('get_user_bets', [formattedAddress]);
+    if (Array.isArray(result)) {
+      return result.map(bet => convertBet(bet));
+    }
+    return [];
   }, [readContract]);
 
-  const getMarketCount = useCallback(() => {
-    return readContract('get_market_count', []);
+  const getMarketCount = useCallback(async () => {
+    const result = await readContract('get_market_count', []);
+    return Number(result);
   }, [readContract]);
 
-  const getDispute = useCallback((marketId) => {
-    return readContract('get_dispute', [marketId]);
+  const getDispute = useCallback(async (marketId) => {
+    const result = await readContract('get_dispute', [marketId]);
+    return convertDispute(result);
   }, [readContract]);
 
   const createMarket = useCallback((team1, team2, league, matchDate, resolutionUrl, generateOdds, fixtureId) => {

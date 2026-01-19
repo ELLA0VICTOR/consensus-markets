@@ -1,3 +1,4 @@
+// src/App.jsx
 import { useState } from 'react';
 import { useContract } from './hooks/useContract';
 import { useFixtures } from './hooks/useFixtures';
@@ -46,43 +47,82 @@ function App() {
   };
 
   const handleDebugClick = async () => {
-    console.log('=== 🐛 DEBUG MARKET INFO ===');
+    console.log('=== 🐛 DETAILED DEBUG INFO ===');
     console.log('Client connected:', contractHook.isConnected);
     console.log('Current account:', contractHook.account?.address);
-    console.log('Client object:', contractHook.client);
+    console.log('Client object exists:', !!contractHook.client);
+    console.log('');
     
     try {
+      // Test market count
       const count = await contractHook.getMarketCount();
       console.log('📊 Total markets from contract:', count);
+      console.log('📊 Type of count:', typeof count);
+      console.log('');
       
       if (count > 0) {
         console.log(`✅ Found ${count} market(s). Fetching details...`);
+        console.log('');
+        
         for (let i = 0; i < count; i++) {
           const market = await contractHook.getMarket(i);
-          console.log(`Market ${i}:`, market);
-          console.log(`  - Team 1: ${market.team1}`);
-          console.log(`  - Team 2: ${market.team2}`);
-          console.log(`  - Status: ${market.status}`);
-          console.log(`  - League: ${market.league}`);
+          
+          console.log(`--- Market ${i} ---`);
+          console.log('Type:', typeof market);
+          console.log('Is Map?:', market instanceof Map);
+          console.log('Is Object?:', typeof market === 'object' && !(market instanceof Map));
+          console.log('Full data:', market);
+          console.log('');
+          console.log('Field Access Tests:');
+          console.log('  ✓ market.id:', market.id, '(type:', typeof market.id, ')');
+          console.log('  ✓ market.team1:', market.team1, '(type:', typeof market.team1, ')');
+          console.log('  ✓ market.team2:', market.team2, '(type:', typeof market.team2, ')');
+          console.log('  ✓ market.league:', market.league, '(type:', typeof market.league, ')');
+          console.log('  ✓ market.status:', market.status, '(type:', typeof market.status, ')');
+          console.log('  ✓ market.odds_team1:', market.odds_team1);
+          console.log('  ✓ market.odds_draw:', market.odds_draw);
+          console.log('  ✓ market.odds_team2:', market.odds_team2);
+          console.log('  ✓ market.total_pool:', market.total_pool);
+          console.log('  ✓ market.winner:', market.winner);
+          console.log('');
         }
       } else {
         console.log('⚠️ No markets found in contract!');
         console.log('');
         console.log('Possible reasons:');
-        console.log('1. Wrong contract address');
-        console.log('2. Markets created on different account/network');
+        console.log('1. No markets have been created yet');
+        console.log('2. Wrong contract address');
         console.log('3. GenLayer Studio state was reset');
-        console.log('4. Contract deployment failed');
+        console.log('');
+      }
+      
+      console.log('--- Current UI State ---');
+      console.log('Markets array:', markets);
+      console.log('Markets count:', markets.length);
+      console.log('Markets is array?:', Array.isArray(markets));
+      
+      if (markets.length > 0) {
+        console.log('First market in UI:', markets[0]);
+        console.log('First market fields accessible?:', {
+          team1: markets[0].team1,
+          team2: markets[0].team2,
+          status: markets[0].status,
+        });
       }
       
       console.log('');
-      console.log('Current UI state:');
-      console.log('Markets in UI:', markets);
-      console.log('Markets count in UI:', markets.length);
-      console.log('======================');
+      console.log('--- Test getUserBalance ---');
+      try {
+        const balance = await contractHook.getUserBalance(contractHook.account.address);
+        console.log('✅ User balance:', balance, '(type:', typeof balance, ')');
+      } catch (err) {
+        console.error('❌ getUserBalance error:', err.message);
+      }
+      
+      console.log('=== END DEBUG ===');
     } catch (err) {
       console.error('❌ Debug error:', err);
-      console.error('Error details:', err.message);
+      console.error('Error message:', err.message);
       console.error('Stack:', err.stack);
     }
   };
@@ -109,13 +149,24 @@ function App() {
           <WalletConnect contractHook={contractHook} />
           
           {/* Debug Button */}
-          <div className="mt-4">
+          <div className="mt-4 flex gap-3">
             <button
               onClick={handleDebugClick}
               className="px-4 py-2 bg-yellow-600 hover:bg-yellow-700 text-white font-semibold rounded-lg transition-colors"
             >
               🐛 Debug Markets
             </button>
+            <button
+              onClick={refreshMarkets}
+              className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white font-semibold rounded-lg transition-colors"
+            >
+              🔄 Refresh Markets
+            </button>
+            {markets.length > 0 && (
+              <div className="px-4 py-2 bg-green-600 text-white font-semibold rounded-lg">
+                ✅ {markets.length} market(s) loaded
+              </div>
+            )}
           </div>
         </div>
       </header>
