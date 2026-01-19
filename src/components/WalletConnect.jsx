@@ -4,25 +4,54 @@ import { WalletButton } from './WalletButton';
 
 export function WalletConnect({ contractHook }) {
   const [balance, setBalance] = useState(0);
+  const [isLoadingBalance, setIsLoadingBalance] = useState(false);
 
   useEffect(() => {
+    let isMounted = true;
+    let interval;
+
     const fetchBalance = async () => {
-      if (contractHook.isConnected && contractHook.account) {
-        try {
-          const bal = await contractHook.getUserBalance(contractHook.account.address);
+      // ✅ FIX #1: Only fetch if client is ready AND we're not already loading
+      if (!contractHook.client || !contractHook.isConnected || !contractHook.account || isLoadingBalance) {
+        return;
+      }
+
+      try {
+        setIsLoadingBalance(true);
+        const bal = await contractHook.getUserBalance(contractHook.account.address);
+        
+        // ✅ FIX #2: Only update state if component is still mounted
+        if (isMounted) {
           setBalance(bal);
-        } catch (err) {
+        }
+      } catch (err) {
+        // ✅ FIX #3: Silent fail - don't spam console unless it's a real error
+        if (isMounted && err.message && !err.message.includes('Server error')) {
           console.error('Error fetching balance:', err);
+        }
+      } finally {
+        if (isMounted) {
+          setIsLoadingBalance(false);
         }
       }
     };
 
-    fetchBalance();
+    // ✅ FIX #4: Only start polling if client is connected
+    if (contractHook.client && contractHook.isConnected && contractHook.account) {
+      fetchBalance(); // Initial fetch
+      
+      // ✅ FIX #5: Longer interval (30 seconds instead of 5) to reduce spam
+      interval = setInterval(fetchBalance, 30000);
+    }
 
-    // Refresh balance every 5 seconds
-    const interval = setInterval(fetchBalance, 5000);
-    return () => clearInterval(interval);
-  }, [contractHook]);
+    // Cleanup
+    return () => {
+      isMounted = false;
+      if (interval) {
+        clearInterval(interval);
+      }
+    };
+  }, [contractHook.client, contractHook.isConnected, contractHook.account, isLoadingBalance]);
 
   if (!contractHook.isConnected) {
     return (

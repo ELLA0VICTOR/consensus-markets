@@ -45,6 +45,48 @@ function App() {
     refreshMarkets();
   };
 
+  const handleDebugClick = async () => {
+    console.log('=== 🐛 DEBUG MARKET INFO ===');
+    console.log('Client connected:', contractHook.isConnected);
+    console.log('Current account:', contractHook.account?.address);
+    console.log('Client object:', contractHook.client);
+    
+    try {
+      const count = await contractHook.getMarketCount();
+      console.log('📊 Total markets from contract:', count);
+      
+      if (count > 0) {
+        console.log(`✅ Found ${count} market(s). Fetching details...`);
+        for (let i = 0; i < count; i++) {
+          const market = await contractHook.getMarket(i);
+          console.log(`Market ${i}:`, market);
+          console.log(`  - Team 1: ${market.team1}`);
+          console.log(`  - Team 2: ${market.team2}`);
+          console.log(`  - Status: ${market.status}`);
+          console.log(`  - League: ${market.league}`);
+        }
+      } else {
+        console.log('⚠️ No markets found in contract!');
+        console.log('');
+        console.log('Possible reasons:');
+        console.log('1. Wrong contract address');
+        console.log('2. Markets created on different account/network');
+        console.log('3. GenLayer Studio state was reset');
+        console.log('4. Contract deployment failed');
+      }
+      
+      console.log('');
+      console.log('Current UI state:');
+      console.log('Markets in UI:', markets);
+      console.log('Markets count in UI:', markets.length);
+      console.log('======================');
+    } catch (err) {
+      console.error('❌ Debug error:', err);
+      console.error('Error details:', err.message);
+      console.error('Stack:', err.stack);
+    }
+  };
+
   const getFilteredMarkets = () => {
     if (filterStatus === 'all') return markets;
     return markets.filter(m => m.status === filterStatus);
@@ -65,6 +107,16 @@ function App() {
           </div>
           
           <WalletConnect contractHook={contractHook} />
+          
+          {/* Debug Button */}
+          <div className="mt-4">
+            <button
+              onClick={handleDebugClick}
+              className="px-4 py-2 bg-yellow-600 hover:bg-yellow-700 text-white font-semibold rounded-lg transition-colors"
+            >
+              🐛 Debug Markets
+            </button>
+          </div>
         </div>
       </header>
 
@@ -173,6 +225,7 @@ function App() {
             {filteredMarkets.length === 0 ? (
               <div className="bg-gray-800 rounded-lg p-12 border border-gray-700 text-center">
                 <p className="text-gray-400 text-lg">No markets found</p>
+                <p className="text-gray-500 text-sm mt-2">Click the debug button above to check contract state</p>
                 <button
                   onClick={() => setActiveTab('create')}
                   className="mt-4 px-6 py-3 bg-blue-600 hover:bg-blue-700 text-white font-semibold rounded-lg transition-colors"

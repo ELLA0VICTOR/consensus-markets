@@ -6,19 +6,23 @@ export function useMarkets(contractHook) {
   const [error, setError] = useState(null);
 
   const fetchMarkets = useCallback(async () => {
-    if (!contractHook.isConnected) {
+    // Wait until contract client is initialized
+    if (!contractHook.client || !contractHook.isConnected) {
       return;
     }
 
     try {
       setIsLoading(true);
+      
       const count = await contractHook.getMarketCount();
       const allMarkets = [];
 
       for (let i = 0; i < count; i++) {
         try {
           const market = await contractHook.getMarket(i);
-          if (market && market.team1) {
+          
+          // Check if market has valid data (not the default empty market)
+          if (market && market.team1 && market.team1 !== '') {
             allMarkets.push(market);
           }
         } catch (err) {
@@ -36,19 +40,15 @@ export function useMarkets(contractHook) {
     }
   }, [contractHook]);
 
-  // Initial fetch
+  // Initial fetch - wait for contract client to be ready
   useEffect(() => {
-    fetchMarkets();
-  }, [fetchMarkets]);
-
-  // Poll for updates every 10 seconds
-  useEffect(() => {
-    const interval = setInterval(() => {
+    if (contractHook.client && contractHook.isConnected) {
       fetchMarkets();
-    }, 10000);
+    }
+  }, [fetchMarkets, contractHook.client, contractHook.isConnected]);
 
-    return () => clearInterval(interval);
-  }, [fetchMarkets]);
+  // DISABLED: Auto-polling removed to reduce noise
+  // Markets will only refresh when manually triggered via refreshMarkets()
 
   // Filter markets by status
   const getMarketsByStatus = useCallback((status) => {

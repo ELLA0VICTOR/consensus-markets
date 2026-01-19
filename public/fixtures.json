@@ -1,5 +1,23 @@
 [
   {
+    "id": "epl_2026_01_17_man_united_man_city",
+    "sport": "Football",
+    "league": "English Premier League",
+    "team1": "Manchester United",
+    "team2": "Manchester City",
+    "date": "2026-01-17T13:30:00Z",
+    "resolution_url": "https://www.bbc.com/sport/football/premier-league/scores-fixtures"
+  },
+  {
+    "id": "epl_2025_01_07_bournemouth_tottenham",
+    "sport": "Football",
+    "league": "English Premier League",
+    "team1": "Bournemouth",
+    "team2": "Tottenham",
+    "date": "2025-01-07T20:00:00Z",
+    "resolution_url": "https://www.bbc.com/sport/football/premier-league/scores-fixtures"
+  },
+  {
     "id": "epl_2025_01_18_arsenal_liverpool",
     "sport": "Football",
     "league": "English Premier League",

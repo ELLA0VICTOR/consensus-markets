@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
 import { createClient } from 'genlayer-js';
-import { simulator } from 'genlayer-js/chains';
+import { studionet } from 'genlayer-js/chains'; // ✅ FIXED: Using studionet for GenLayer Studio
 import { CONTRACT_ADDRESS } from '../config/genlayer';
 import { useWallet } from '../contexts/WalletContext';
 
@@ -27,13 +27,13 @@ export function useContract() {
           // For MetaMask, we need to use the browser's provider
           // GenLayerJS will handle MetaMask signing automatically
           cli = createClient({
-            chain: simulator,
+            chain: studionet, // ✅ FIXED: Using studionet for GenLayer Studio
             account: account.address, // Just pass the address for MetaMask
           });
         } else {
           // For auto-generated accounts, use the full account object with private key
           cli = createClient({
-            chain: simulator,
+            chain: studionet, // ✅ FIXED: Using studionet for GenLayer Studio
             account: account, // Full account object with private key
           });
         }
@@ -86,9 +86,14 @@ export function useContract() {
         value,
       });
 
+      console.log('🔗 Transaction Hash:', hash);
+      console.log('⏳ Waiting for finalization (this may take 60-90 seconds)...');
+
       const receipt = await client.waitForTransactionReceipt({
         hash,
         status: 'FINALIZED',
+        interval: 5000, // Check every 5 seconds
+        retries: 30,    // Try for up to 2.5 minutes (30 * 5s = 150s)
       });
 
       setIsLoading(false);

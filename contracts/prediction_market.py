@@ -117,52 +117,43 @@ class PredictionMarket(gl.Contract):
             generate_odds: Whether to generate odds using LLM
             fixture_id: Optional fixture identifier
         """
-        creator = gl.message_sender()
+        creator = gl.message.sender_address
         self._ensure_user_balance(creator)
         
-        # Generate odds using LLM if requested
+        # Generate odds if requested
         if generate_odds:
-            def nondet():
-                prompt = f"""You are analyzing an upcoming sports match to provide fair betting odds.
+            # ✅ FIX #1: Use lambda function instead of input= parameter
+            odds_data = gl.eq_principle_prompt_non_comparative(
+                lambda: f"""Generate betting odds for this match:
+Team 1: {team1}
+Team 2: {team2}
+League: {league}
+Date: {match_date}
 
-Match Details:
-- League: {league}
-- Team 1: {team1}
-- Team 2: {team2}
-- Date: {match_date}
-
-Generate realistic decimal odds for:
-1. Team 1 Win
-2. Draw
-3. Team 2 Win
-
-Rules:
-- Odds must be between 1.03 and 10.00
-- Total implied probability should be 100-110% (bookmaker margin)
-- Higher probability = lower odds
-- Consider team strength, home advantage, recent form
-
-Respond ONLY with JSON:
+Provide realistic decimal odds between 1.50 and 5.00.
+Respond ONLY with JSON (no markdown):
 {{
-  "odds_team1": "X.XX",
-  "odds_draw": "X.XX",
-  "odds_team2": "X.XX",
-  "reasoning": "brief explanation"
-}}
-
-Do not include any other text, markdown formatting, or code fences.
-The output must be valid JSON parsable by json.loads()."""
-                
-                res = gl.exec_prompt(prompt)
-                res = res.replace("```json", "").replace("```", "").strip()
-                return json.loads(res)
+  "odds_team1": "2.50",
+  "odds_draw": "3.20",
+  "odds_team2": "2.80"
+}}""",
+                task="Generate realistic betting odds for this football match in JSON format",
+                criteria="""
+                    Output must be valid JSON with keys: odds_team1, odds_draw, odds_team2
+                    All odds must be decimal strings between 1.50 and 5.00
+                    Total implied probability should be 100-110% (bookmaker margin)
+                    No markdown formatting or extra text
+                """
+            )
             
-            odds_data = gl.eq_principle_strict_eq(nondet)
+            # Parse the JSON response
+            if isinstance(odds_data, str):
+                odds_data = json.loads(odds_data.replace("```json", "").replace("```", "").strip())
+            
             odds_team1 = odds_data["odds_team1"]
             odds_draw = odds_data["odds_draw"]
             odds_team2 = odds_data["odds_team2"]
         else:
-            # Default odds if not generated
             odds_team1 = "2.00"
             odds_draw = "3.00"
             odds_team2 = "2.00"
@@ -183,14 +174,11 @@ The output must be valid JSON parsable by json.loads()."""
             status="open",
             winner=i8(-1),
             total_pool=u256(0),
-            created_at=u256(gl.block.number)
+            created_at=current_market_id
         )
         
         self.markets[current_market_id] = market
-        
-        # Initialize empty bet array for this market
-        self.bets[current_market_id] = gl.storage.inmem_allocate(DynArray[Bet])
-        
+        self.bets[current_market_id] = []
         self.next_market_id += 1
     
     @gl.public.write
@@ -203,14 +191,13 @@ The output must be valid JSON parsable by json.loads()."""
             outcome: 0=draw, 1=team1, 2=team2
             amount: Bet amount in play-money
         """
-        user = gl.message_sender()
+        user = gl.message.sender_address
         self._ensure_user_balance(user)
         
         market_id_u256 = u256(market_id)
         outcome_i8 = i8(outcome)
         amount_u256 = u256(amount)
         
-        # Validate market exists and is open
         if market_id_u256 not in self.markets:
             raise Exception("Market does not exist")
         
@@ -219,11 +206,9 @@ The output must be valid JSON parsable by json.loads()."""
         if market.status != "open":
             raise Exception("Market is not open for betting")
         
-        # Validate outcome
         if outcome < 0 or outcome > 2:
             raise Exception("Invalid outcome")
         
-        # Check user balance
         user_balance = self.user_balances[user]
         if user_balance < amount_u256:
             raise Exception("Insufficient balance")
@@ -238,26 +223,22 @@ The output must be valid JSON parsable by json.loads()."""
         
         potential_payout = u256(int(float(amount_u256) * odds))
         
-        # Deduct from user balance
         self.user_balances[user] = user_balance - amount_u256
         
-        # Create bet
         bet = Bet(
             user=user,
             market_id=market_id_u256,
             outcome=outcome_i8,
             amount=amount_u256,
             potential_payout=potential_payout,
-            timestamp=u256(gl.block.number),
+            timestamp=market_id_u256,
             claimed=False
         )
         
-        # Add to market's bets
         market_bets = self.bets[market_id_u256]
         market_bets.append(bet)
         self.bets[market_id_u256] = market_bets
         
-        # Update market total pool
         market.total_pool += amount_u256
         self.markets[market_id_u256] = market
     
@@ -279,47 +260,40 @@ The output must be valid JSON parsable by json.loads()."""
         if market.status != "open":
             raise Exception("Market cannot be resolved")
         
-        # LLM-based resolution with web scraping
-        def nondet():
-            web_data = gl.get_webpage(market.resolution_url, mode='text')
-            
-            prompt = f"""Extract the match result from this webpage content.
+        # ✅ FIX #2: Replace strict_eq with prompt_non_comparative for LLM operations
+        result_str = gl.eq_principle_prompt_non_comparative(
+            lambda: f"""Extract the match result from this webpage.
 
 Match: {market.team1} vs {market.team2}
 Date: {market.match_date}
+URL: {market.resolution_url}
 
 Webpage content:
-{web_data}
+{gl.nondet.web.render(market.resolution_url, mode='text')}
 
-Determine the winner:
-- If you see "Kick off [time]" between team names - match hasn't started yet
-- Look for final score (e.g., "2-1", "Arsenal 3-2 Chelsea", "FT: 2-1")
-- Identify which team won or if it's a draw
-- If score extraction fails, assume match not played yet
-
-Respond ONLY with JSON:
+Determine the winner. Respond ONLY with JSON (no markdown):
 {{
-  "winner": int,
-  "score_team1": int,
-  "score_team2": int,
-  "confidence": str
+  "winner": -1,
+  "score_team1": -1,
+  "score_team2": -1
 }}
 
-Where winner is: -1=not played, 0=draw, 1=team1, 2=team2
-And scores are: -1 if not found, otherwise the actual score
-
-Do not include any other text, markdown formatting, or code fences.
-The output must be valid JSON parsable by json.loads()."""
-            
-            res = gl.exec_prompt(prompt)
-            res = res.replace("```json", "").replace("```", "").strip()
-            return json.loads(res)
+Where winner is: -1=not played, 0=draw, 1=team1, 2=team2""",
+            task="Extract match result and determine winner from webpage content",
+            criteria="""
+                Output must be valid JSON with keys: winner, score_team1, score_team2
+                winner must be -1, 0, 1, or 2
+                Scores must be integers (-1 if not played)
+                No markdown formatting or extra text
+            """
+        )
         
-        result = gl.eq_principle_strict_eq(nondet)
+        # Parse result
+        result_str = result_str.replace("```json", "").replace("```", "").strip()
+        result = json.loads(result_str)
         
         winner = i8(result["winner"])
         
-        # Update market status
         if winner == -1:
             raise Exception("Match has not been played yet")
         
@@ -337,7 +311,7 @@ The output must be valid JSON parsable by json.loads()."""
             claimed_winner: The winner the disputer claims is correct
             stake: Amount to stake on the dispute
         """
-        user = gl.message_sender()
+        user = gl.message.sender_address
         self._ensure_user_balance(user)
         
         market_id_u256 = u256(market_id)
@@ -355,42 +329,35 @@ The output must be valid JSON parsable by json.loads()."""
         if market_id_u256 in self.disputes:
             raise Exception("Market already disputed")
         
-        # Check user balance
         user_balance = self.user_balances[user]
         if user_balance < stake_u256:
             raise Exception("Insufficient balance for stake")
         
-        # Deduct stake
         self.user_balances[user] = user_balance - stake_u256
         
-        # Create dispute
         dispute = Dispute(
             disputer=user,
             market_id=market_id_u256,
             stake=stake_u256,
             claimed_winner=claimed_winner_i8,
             status="pending",
-            created_at=u256(gl.block.number)
+            created_at=market_id_u256
         )
         
         self.disputes[market_id_u256] = dispute
-        
-        # Update market status
         market.status = "disputed"
         self.markets[market_id_u256] = market
         
-        # Adjudicate dispute using LLM
-        def nondet():
-            web_data = gl.get_webpage(market.resolution_url, mode='text')
-            
-            prompt = f"""Re-evaluate this match result due to a dispute.
+        # ✅ FIX #3: Replace strict_eq with prompt_non_comparative for dispute adjudication
+        adjudication_str = gl.eq_principle_prompt_non_comparative(
+            lambda: f"""Re-evaluate this match result due to a dispute.
 
 Match: {market.team1} vs {market.team2}
 Original Resolution: Winner = {market.winner}
 Disputed Claim: Winner = {claimed_winner}
 
 Fresh webpage content:
-{web_data}
+{gl.nondet.web.render(market.resolution_url, mode='text')}
 
 Carefully analyze the content and determine:
 1. What is the correct winner?
@@ -400,33 +367,33 @@ Respond ONLY with JSON:
 {{
   "correct_winner": int,
   "dispute_valid": bool,
-  "reasoning": str
+  "reasoning": "brief explanation"
 }}
 
-Where correct_winner is: -1=not played, 0=draw, 1=team1, 2=team2
-
-Do not include any other text, markdown formatting, or code fences.
-The output must be valid JSON parsable by json.loads()."""
-            
-            res = gl.exec_prompt(prompt)
-            res = res.replace("```json", "").replace("```", "").strip()
-            return json.loads(res)
+Where correct_winner is: -1=not played, 0=draw, 1=team1, 2=team2""",
+            task="Re-evaluate match result and determine if dispute is valid",
+            criteria="""
+                Output must be valid JSON with keys: correct_winner, dispute_valid, reasoning
+                correct_winner must be -1, 0, 1, or 2
+                dispute_valid must be boolean
+                reasoning must be a brief explanation
+                No markdown formatting or extra text
+            """
+        )
         
-        adjudication = gl.eq_principle_strict_eq(nondet)
+        # Parse adjudication
+        adjudication_str = adjudication_str.replace("```json", "").replace("```", "").strip()
+        adjudication = json.loads(adjudication_str)
         
         correct_winner = i8(adjudication["correct_winner"])
         dispute_valid = adjudication["dispute_valid"]
         
         if dispute_valid:
-            # Dispute upheld - update market winner
             market.winner = correct_winner
             market.status = "resolved"
             dispute.status = "upheld"
-            
-            # Return stake plus reward
             self.user_balances[user] = self.user_balances[user] + stake_u256 + stake_u256
         else:
-            # Dispute rejected - lose stake
             market.status = "resolved"
             dispute.status = "rejected"
         
@@ -441,7 +408,7 @@ The output must be valid JSON parsable by json.loads()."""
         Args:
             market_id: ID of the market to claim from
         """
-        user = gl.message_sender()
+        user = gl.message.sender_address
         self._ensure_user_balance(user)
         
         market_id_u256 = u256(market_id)
@@ -454,7 +421,6 @@ The output must be valid JSON parsable by json.loads()."""
         if market.status != "resolved":
             raise Exception("Market not resolved yet")
         
-        # Find user's winning bets
         market_bets = self.bets[market_id_u256]
         total_winnings = u256(0)
         
@@ -462,24 +428,18 @@ The output must be valid JSON parsable by json.loads()."""
             bet = market_bets[i]
             
             if bet.user == user and not bet.claimed and bet.outcome == market.winner:
-                # Calculate winnings with protocol fee
                 gross_winnings = bet.potential_payout
                 fee = (gross_winnings * u256(self.protocol_fee_bps)) // u256(10000)
                 net_winnings = gross_winnings - fee
                 
                 total_winnings += net_winnings
-                
-                # Mark as claimed
                 bet.claimed = True
                 market_bets[i] = bet
         
         if total_winnings == 0:
             raise Exception("No winnings to claim")
         
-        # Update bets storage
         self.bets[market_id_u256] = market_bets
-        
-        # Credit user balance
         self.user_balances[user] = self.user_balances[user] + total_winnings
     
     # View methods
@@ -504,14 +464,13 @@ The output must be valid JSON parsable by json.loads()."""
         market_id_u256 = u256(market_id)
         if market_id_u256 in self.bets:
             return self.bets[market_id_u256]
-        return gl.storage.inmem_allocate(DynArray[Bet])
+        return []
     
     @gl.public.view
     def get_user_bets(self, user: Address) -> DynArray[Bet]:
         """Get all bets placed by a user."""
         user_bets = gl.storage.inmem_allocate(DynArray[Bet])
         
-        # Iterate through all markets
         for market_id in range(self.next_market_id):
             if market_id in self.bets:
                 market_bets = self.bets[market_id]
@@ -533,7 +492,6 @@ The output must be valid JSON parsable by json.loads()."""
         if market_id_u256 in self.disputes:
             return self.disputes[market_id_u256]
         
-        # Return default dispute if none exists
         return Dispute(
             disputer=Address("0x0000000000000000000000000000000000000000"),
             market_id=u256(0),
