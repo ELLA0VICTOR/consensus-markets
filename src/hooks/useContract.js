@@ -90,6 +90,8 @@ export function useContract() {
     setError(null);
 
     try {
+      console.log(`📝 Calling ${functionName} with args:`, args);
+      
       const hash = await client.writeContract({
         address: CONTRACT_ADDRESS,
         functionName,
@@ -97,8 +99,10 @@ export function useContract() {
         value,
       });
 
+      console.log('✅ Transaction submitted!');
       console.log('🔗 Transaction Hash:', hash);
       console.log('⏳ Waiting for finalization (this may take 60-90 seconds)...');
+      console.log('💡 Do not close this tab or refresh the page.');
 
       const receipt = await client.waitForTransactionReceipt({
         hash,
@@ -107,12 +111,13 @@ export function useContract() {
         retries: 30,
       });
 
+      console.log('🎉 Transaction finalized!', receipt);
       setIsLoading(false);
       return receipt;
     } catch (err) {
       setIsLoading(false);
       setError(err.message);
-      console.error(`Error writing ${functionName}:`, err);
+      console.error(`❌ Error with ${functionName}:`, err);
       throw err;
     }
   }, [client]);

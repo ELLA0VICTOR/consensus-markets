@@ -61,16 +61,6 @@ export function CreateMarket({ contractHook, onMarketCreated, selectedFixture })
         fixtureId: formData.fixtureId,
       });
       
-      console.log('📝 Data Types:', {
-        team1: typeof formData.team1,
-        team2: typeof formData.team2,
-        league: typeof formData.league,
-        matchDate: typeof formData.matchDate,
-        resolutionUrl: typeof formData.resolutionUrl,
-        generateOdds: typeof formData.generateOdds,
-        fixtureId: typeof formData.fixtureId,
-      });
-      
       console.log('⏳ Calling createMarket...');
       
       const receipt = await contractHook.createMarket(
@@ -85,11 +75,7 @@ export function CreateMarket({ contractHook, onMarketCreated, selectedFixture })
       
       console.log('✅ ========== SUCCESS ==========');
       console.log('✅ Market created successfully!');
-      console.log('✅ Receipt:', receipt);
       console.log('✅ Transaction Hash:', receipt?.hash);
-      console.log('✅ Transaction Status:', receipt?.status);
-      console.log('✅ Result:', receipt?.result);
-      console.log('✅ Result Name:', receipt?.result_name);
       console.log('=====================================');
       
       // Reset form
@@ -104,37 +90,18 @@ export function CreateMarket({ contractHook, onMarketCreated, selectedFixture })
       });
       
       // Show success message
-      alert(`✅ Market created successfully!\n\nTransaction: ${receipt?.hash}\n\nThe market will appear shortly.`);
+      alert(`✅ Market created successfully!\n\nTransaction: ${receipt?.hash}\n\nRefreshing markets in 2 seconds...`);
       
-      // Trigger refresh callback
+      // FIXED: Wait for contract state to propagate, then trigger refresh
       if (onMarketCreated) {
-        await onMarketCreated();
+        console.log('⏳ Waiting for contract state to propagate...');
+        await onMarketCreated(); // This now includes the delay
+        console.log('✅ Markets refreshed!');
       }
       
     } catch (err) {
       console.error('❌ ========== ERROR ==========');
-      console.error('❌ FULL ERROR OBJECT:', err);
-      console.error('❌ Error Name:', err?.name);
       console.error('❌ Error Message:', err?.message);
-      console.error('❌ Error Stack:', err?.stack);
-      
-      // Try to extract more details
-      if (err.cause) {
-        console.error('❌ Error Cause:', err.cause);
-      }
-      if (err.details) {
-        console.error('❌ Error Details:', err.details);
-      }
-      if (err.shortMessage) {
-        console.error('❌ Short Message:', err.shortMessage);
-      }
-      if (err.metaMessages) {
-        console.error('❌ Meta Messages:', err.metaMessages);
-      }
-      if (err.data) {
-        console.error('❌ Error Data:', err.data);
-      }
-      
       console.error('=====================================');
       
       setError(err.message || 'Failed to create market');

@@ -46,6 +46,7 @@ class Dispute:
     created_at: u256
 
 class PredictionMarket(gl.Contract):
+    # ✅ CRITICAL FIX: Declare persistent storage fields in class body, NOT in __init__
     markets: TreeMap[u256, Market]
     user_balances: TreeMap[Address, u256]
     bets: TreeMap[u256, DynArray[Bet]]
@@ -62,11 +63,9 @@ class PredictionMarket(gl.Contract):
             initial_balance: Play-money balance given to each new user
             protocol_fee_bps: Protocol fee in basis points (e.g., 250 = 2.5%)
         """
-        self.markets = gl.storage.inmem_allocate(TreeMap[u256, Market])
-        self.user_balances = gl.storage.inmem_allocate(TreeMap[Address, u256])
-        self.bets = gl.storage.inmem_allocate(TreeMap[u256, DynArray[Bet]])
-        self.disputes = gl.storage.inmem_allocate(TreeMap[u256, Dispute])
-        self.next_market_id = 0
+        # ✅ NO inmem_allocate! Storage is automatically zero-initialized
+        # Just set the config values
+        self.next_market_id = u256(0)
         self.protocol_fee_bps = u16(protocol_fee_bps)
         self.initial_balance = u256(initial_balance)
     
@@ -122,8 +121,7 @@ class PredictionMarket(gl.Contract):
         
         # Generate odds if requested
         if generate_odds:
-            # ✅ FIX #1: Use lambda function instead of input= parameter
-            odds_data = gl.eq_principle_prompt_non_comparative(
+            odds_data = gl.eq_principle.prompt_non_comparative(
                 lambda: f"""Generate betting odds for this match:
 Team 1: {team1}
 Team 2: {team2}
@@ -179,7 +177,7 @@ Respond ONLY with JSON (no markdown):
         
         self.markets[current_market_id] = market
         self.bets[current_market_id] = []
-        self.next_market_id += 1
+        self.next_market_id = u256(int(self.next_market_id) + 1)
     
     @gl.public.write
     def place_bet(self, market_id: int, outcome: int, amount: int):
@@ -260,8 +258,7 @@ Respond ONLY with JSON (no markdown):
         if market.status != "open":
             raise Exception("Market cannot be resolved")
         
-        # ✅ FIX #2: Replace strict_eq with prompt_non_comparative for LLM operations
-        result_str = gl.eq_principle_prompt_non_comparative(
+        result_str = gl.eq_principle.prompt_non_comparative(
             lambda: f"""Extract the match result from this webpage.
 
 Match: {market.team1} vs {market.team2}
@@ -348,8 +345,7 @@ Where winner is: -1=not played, 0=draw, 1=team1, 2=team2""",
         market.status = "disputed"
         self.markets[market_id_u256] = market
         
-        # ✅ FIX #3: Replace strict_eq with prompt_non_comparative for dispute adjudication
-        adjudication_str = gl.eq_principle_prompt_non_comparative(
+        adjudication_str = gl.eq_principle.prompt_non_comparative(
             lambda: f"""Re-evaluate this match result due to a dispute.
 
 Match: {market.team1} vs {market.team2}
@@ -469,9 +465,10 @@ Where correct_winner is: -1=not played, 0=draw, 1=team1, 2=team2""",
     @gl.public.view
     def get_user_bets(self, user: Address) -> DynArray[Bet]:
         """Get all bets placed by a user."""
-        user_bets = gl.storage.inmem_allocate(DynArray[Bet])
+        user_bets = []
         
-        for market_id in range(self.next_market_id):
+        for market_id_int in range(int(self.next_market_id)):
+            market_id = u256(market_id_int)
             if market_id in self.bets:
                 market_bets = self.bets[market_id]
                 for bet in market_bets:

@@ -1,5 +1,5 @@
 // GenLayer configuration
-export const CONTRACT_ADDRESS = import.meta.env.VITE_CONTRACT_ADDRESS || '0x4E93Ae1086A65844A8669616C4f840845cfA778A';
+export const CONTRACT_ADDRESS = import.meta.env.VITE_CONTRACT_ADDRESS || '0x42AE282Ce35B1c0BFC653f72B13FDa85455A325d';
 
 // Network configurations
 export const NETWORKS = {

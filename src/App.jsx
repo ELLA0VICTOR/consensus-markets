@@ -9,6 +9,7 @@ import { BettingInterface } from './components/BettingInterface';
 import { CreateMarket } from './components/CreateMarket';
 import { FixtureList } from './components/FixtureList';
 import { MarketResolution } from './components/MarketResolution';
+import { TestMarketCreator } from './components/TestMarketCreator';
 
 function App() {
   const contractHook = useContract();
@@ -186,6 +187,16 @@ function App() {
               Markets
             </button>
             <button
+              onClick={() => setActiveTab('test')}
+              className={`px-6 py-3 font-semibold transition-colors ${
+                activeTab === 'test'
+                  ? 'text-yellow-400 border-b-2 border-yellow-400'
+                  : 'text-gray-400 hover:text-white'
+              }`}
+            >
+              🧪 Quick Test
+            </button>
+            <button
               onClick={() => setActiveTab('fixtures')}
               className={`px-6 py-3 font-semibold transition-colors ${
                 activeTab === 'fixtures'
@@ -306,6 +317,16 @@ function App() {
               fixtures={fixtures}
               onSelectFixture={handleFixtureSelect}
               isLoading={fixturesLoading}
+            />
+          </div>
+        )}
+
+        {/* Quick Test Tab */}
+        {activeTab === 'test' && (
+          <div className="max-w-4xl mx-auto">
+            <TestMarketCreator
+              contractHook={contractHook}
+              onMarketCreated={handleMarketCreated}
             />
           </div>
         )}
