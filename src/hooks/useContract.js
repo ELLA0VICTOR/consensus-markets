@@ -18,6 +18,10 @@ export function useContract() {
   const [isConnected, setIsConnected] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState(null);
+  
+  // ✅ REMOVED: Local balance tracking - we'll fetch from contract
+  const [userBalance, setUserBalance] = useState(null);
+  const [balanceLoading, setBalanceLoading] = useState(false);
 
   // Initialize client when account changes
   useEffect(() => {
@@ -25,6 +29,7 @@ export function useContract() {
       if (!account) {
         setClient(null);
         setIsConnected(false);
+        setUserBalance(null);
         return;
       }
 
@@ -32,13 +37,11 @@ export function useContract() {
         let cli;
         
         if (walletType === 'metamask') {
-          // For MetaMask, we need to use the browser's provider
           cli = createClient({
             chain: studionet,
             account: account.address,
           });
         } else {
-          // For auto-generated accounts, use the full account object with private key
           cli = createClient({
             chain: studionet,
             account: account,
@@ -48,6 +51,8 @@ export function useContract() {
         setClient(cli);
         setIsConnected(true);
         setError(null);
+        
+        console.log('✅ Client initialized');
       } catch (err) {
         setError(err.message);
         console.error('Failed to initialize client:', err);
@@ -56,6 +61,47 @@ export function useContract() {
 
     initClient();
   }, [account, walletType]);
+
+  // ✅ NEW: Fetch balance from contract on mount and after transactions
+  const fetchBalance = useCallback(async (address) => {
+    if (!client || !address) {
+      return null;
+    }
+
+    setBalanceLoading(true);
+    try {
+      const result = await client.readContract({
+        address: CONTRACT_ADDRESS,
+        functionName: 'get_user_balance',
+        args: [address],
+      });
+      
+      const balance = Number(convertGenLayerData(result));
+      console.log(`💰 Fetched balance from contract: $${balance}`);
+      setUserBalance(balance);
+      return balance;
+    } catch (err) {
+      console.error('Error fetching balance:', err);
+      // ✅ Better error handling - don't fail silently
+      if (err.message && err.message.includes('502')) {
+        console.warn('⚠️ 502 error - retrying in 2 seconds...');
+        await new Promise(resolve => setTimeout(resolve, 2000));
+        return fetchBalance(address); // Retry once
+      }
+      setError(err.message);
+      return null;
+    } finally {
+      setBalanceLoading(false);
+    }
+  }, [client]);
+
+  // ✅ Fetch balance when client or account changes
+  useEffect(() => {
+    if (client && account) {
+      const address = walletType === 'metamask' ? account.address : account.address;
+      fetchBalance(address);
+    }
+  }, [client, account, walletType, fetchBalance]);
 
   // Read contract method with automatic data conversion
   const readContract = useCallback(async (functionName, args = []) => {
@@ -70,9 +116,7 @@ export function useContract() {
         args,
       });
       
-      // Convert GenLayer data structures to plain objects
       const converted = convertGenLayerData(result);
-      
       return converted;
     } catch (err) {
       console.error(`Error reading ${functionName}:`, err);
@@ -80,7 +124,7 @@ export function useContract() {
     }
   }, [client]);
 
-  // Write contract method
+  // Write contract method with balance refresh
   const writeContract = useCallback(async (functionName, args = [], value = 0) => {
     if (!client) {
       throw new Error('Client not initialized');
@@ -112,6 +156,11 @@ export function useContract() {
       });
 
       console.log('🎉 Transaction finalized!', receipt);
+      
+      // ✅ CRITICAL: Refresh balance from contract after any transaction
+      const address = walletType === 'metamask' ? account.address : account.address;
+      await fetchBalance(address);
+      
       setIsLoading(false);
       return receipt;
     } catch (err) {
@@ -120,25 +169,21 @@ export function useContract() {
       console.error(`❌ Error with ${functionName}:`, err);
       throw err;
     }
-  }, [client]);
+  }, [client, account, walletType, fetchBalance]);
 
-  // Specific contract methods with proper conversions
+  // Specific contract methods
   const getMarket = useCallback(async (marketId) => {
     const result = await readContract('get_market', [marketId]);
     return convertMarket(result);
   }, [readContract]);
 
   const getUserBalance = useCallback(async (address) => {
-    // Format address properly for contract
-    const formattedAddress = formatAddressForContract(address);
-    const result = await readContract('get_user_balance', [formattedAddress]);
-    // Result is already converted by readContract, just ensure it's a number
-    return Number(result);
-  }, [readContract]);
+    // ✅ FIXED: Call contract instead of returning local state
+    return await fetchBalance(address);
+  }, [fetchBalance]);
 
   const getMarketBets = useCallback(async (marketId) => {
     const result = await readContract('get_market_bets', [marketId]);
-    // Result is an array of bets
     if (Array.isArray(result)) {
       return result.map(bet => convertBet(bet));
     }
@@ -146,8 +191,7 @@ export function useContract() {
   }, [readContract]);
 
   const getUserBets = useCallback(async (address) => {
-    const formattedAddress = formatAddressForContract(address);
-    const result = await readContract('get_user_bets', [formattedAddress]);
+    const result = await readContract('get_user_bets', [address]);
     if (Array.isArray(result)) {
       return result.map(bet => convertBet(bet));
     }
@@ -180,8 +224,10 @@ export function useContract() {
     return writeContract('dispute_market', [marketId, claimedWinner, stake]);
   }, [writeContract]);
 
-  const claimWinnings = useCallback((marketId) => {
-    return writeContract('claim_winnings', [marketId]);
+  const claimWinnings = useCallback(async (marketId) => {
+    const receipt = await writeContract('claim_winnings', [marketId]);
+    // ✅ Balance will auto-refresh after writeContract completes
+    return receipt;
   }, [writeContract]);
 
   return {
@@ -190,7 +236,9 @@ export function useContract() {
     walletType,
     isConnected,
     isLoading,
+    balanceLoading, // ✅ NEW: Separate loading state for balance
     error,
+    userBalance, // ✅ Now comes from contract, not hardcoded
     // Read methods
     getMarket,
     getUserBalance,

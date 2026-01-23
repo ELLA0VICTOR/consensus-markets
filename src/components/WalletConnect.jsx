@@ -1,3 +1,4 @@
+// src/components/WalletConnect.jsx
 import { useState, useEffect } from 'react';
 import { formatBalance } from '../utils/formatting';
 import { WalletButton } from './WalletButton';
@@ -11,7 +12,15 @@ export function WalletConnect({ contractHook }) {
     let interval;
 
     const fetchBalance = async () => {
-      // ✅ FIX #1: Only fetch if client is ready AND we're not already loading
+      // ✅ Use the userBalance from contractHook if available (auto-updated)
+      if (contractHook.userBalance !== null && contractHook.userBalance !== undefined) {
+        if (isMounted) {
+          setBalance(contractHook.userBalance);
+        }
+        return;
+      }
+
+      // Fallback: fetch manually if not available
       if (!contractHook.client || !contractHook.isConnected || !contractHook.account || isLoadingBalance) {
         return;
       }
@@ -20,12 +29,10 @@ export function WalletConnect({ contractHook }) {
         setIsLoadingBalance(true);
         const bal = await contractHook.getUserBalance(contractHook.account.address);
         
-        // ✅ FIX #2: Only update state if component is still mounted
         if (isMounted) {
           setBalance(bal);
         }
       } catch (err) {
-        // ✅ FIX #3: Silent fail - don't spam console unless it's a real error
         if (isMounted && err.message && !err.message.includes('Server error')) {
           console.error('Error fetching balance:', err);
         }
@@ -36,22 +43,23 @@ export function WalletConnect({ contractHook }) {
       }
     };
 
-    // ✅ FIX #4: Only start polling if client is connected
+    // Check for auto-updated balance from hook
+    if (contractHook.userBalance !== null && contractHook.userBalance !== undefined) {
+      setBalance(contractHook.userBalance);
+    }
+
     if (contractHook.client && contractHook.isConnected && contractHook.account) {
-      fetchBalance(); // Initial fetch
-      
-      // ✅ FIX #5: Longer interval (30 seconds instead of 5) to reduce spam
+      fetchBalance();
       interval = setInterval(fetchBalance, 30000);
     }
 
-    // Cleanup
     return () => {
       isMounted = false;
       if (interval) {
         clearInterval(interval);
       }
     };
-  }, [contractHook.client, contractHook.isConnected, contractHook.account, isLoadingBalance]);
+  }, [contractHook.client, contractHook.isConnected, contractHook.account, contractHook.userBalance, isLoadingBalance]);
 
   if (!contractHook.isConnected) {
     return (

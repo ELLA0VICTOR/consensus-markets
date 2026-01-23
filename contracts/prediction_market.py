@@ -448,11 +448,14 @@ Where correct_winner is: -1=not played, 0=draw, 1=team1, 2=team2""",
         return self._get_default_market()
     
     @gl.public.view
-    def get_user_balance(self, user: Address) -> int:
+    def get_user_balance(self, user: str) -> int:
         """Get user's play-money balance."""
-        if user in self.user_balances:
-            return int(self.user_balances[user])
-        return int(self.initial_balance)
+        try:
+            user_addr = Address(user)
+            self._ensure_user_balance(user_addr)
+            return int(self.user_balances[user_addr])
+        except:
+            return int(self.initial_balance)
     
     @gl.public.view
     def get_market_bets(self, market_id: int) -> DynArray[Bet]:
@@ -463,19 +466,23 @@ Where correct_winner is: -1=not played, 0=draw, 1=team1, 2=team2""",
         return []
     
     @gl.public.view
-    def get_user_bets(self, user: Address) -> DynArray[Bet]:
+    def get_user_bets(self, user: str) -> DynArray[Bet]:
         """Get all bets placed by a user."""
-        user_bets = []
-        
-        for market_id_int in range(int(self.next_market_id)):
-            market_id = u256(market_id_int)
-            if market_id in self.bets:
-                market_bets = self.bets[market_id]
-                for bet in market_bets:
-                    if bet.user == user:
-                        user_bets.append(bet)
-        
-        return user_bets
+        try:
+            user_addr = Address(user)
+            user_bets = []
+            
+            for market_id_int in range(int(self.next_market_id)):
+                market_id = u256(market_id_int)
+                if market_id in self.bets:
+                    market_bets = self.bets[market_id]
+                    for bet in market_bets:
+                        if bet.user == user_addr:
+                            user_bets.append(bet)
+            
+            return user_bets
+        except:
+            return []
     
     @gl.public.view
     def get_market_count(self) -> int:
