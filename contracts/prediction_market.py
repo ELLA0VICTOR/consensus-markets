@@ -46,7 +46,7 @@ class Dispute:
     created_at: u256
 
 class PredictionMarket(gl.Contract):
-    # ✅ CRITICAL FIX: Declare persistent storage fields in class body, NOT in __init__
+    # ✅ Persistent storage fields declared in class body
     markets: TreeMap[u256, Market]
     user_balances: TreeMap[Address, u256]
     bets: TreeMap[u256, DynArray[Bet]]
@@ -63,8 +63,6 @@ class PredictionMarket(gl.Contract):
             initial_balance: Play-money balance given to each new user
             protocol_fee_bps: Protocol fee in basis points (e.g., 250 = 2.5%)
         """
-        # ✅ NO inmem_allocate! Storage is automatically zero-initialized
-        # Just set the config values
         self.next_market_id = u256(0)
         self.protocol_fee_bps = u16(protocol_fee_bps)
         self.initial_balance = u256(initial_balance)
@@ -258,15 +256,20 @@ Respond ONLY with JSON (no markdown):
         if market.status != "open":
             raise Exception("Market cannot be resolved")
         
+        # ✅ CRITICAL FIX: Copy storage to memory before nondet block
+        # From docs: "Storage objects need to be copied to memory when you want 
+        # to use them in non-deterministic blocks"
+        market_memory = gl.storage.copy_to_memory(market)
+        
         result_str = gl.eq_principle.prompt_non_comparative(
             lambda: f"""Extract the match result from this webpage.
 
-Match: {market.team1} vs {market.team2}
-Date: {market.match_date}
-URL: {market.resolution_url}
+Match: {market_memory.team1} vs {market_memory.team2}
+Date: {market_memory.match_date}
+URL: {market_memory.resolution_url}
 
 Webpage content:
-{gl.nondet.web.render(market.resolution_url, mode='text')}
+{gl.nondet.web.render(market_memory.resolution_url, mode='text')}
 
 Determine the winner. Respond ONLY with JSON (no markdown):
 {{
@@ -294,6 +297,7 @@ Where winner is: -1=not played, 0=draw, 1=team1, 2=team2""",
         if winner == -1:
             raise Exception("Match has not been played yet")
         
+        # ✅ Update the storage market (not the memory copy)
         market.winner = winner
         market.status = "resolved"
         self.markets[market_id_u256] = market
@@ -345,15 +349,18 @@ Where winner is: -1=not played, 0=draw, 1=team1, 2=team2""",
         market.status = "disputed"
         self.markets[market_id_u256] = market
         
+        # ✅ CRITICAL FIX: Copy storage to memory before nondet block
+        market_memory = gl.storage.copy_to_memory(market)
+        
         adjudication_str = gl.eq_principle.prompt_non_comparative(
             lambda: f"""Re-evaluate this match result due to a dispute.
 
-Match: {market.team1} vs {market.team2}
-Original Resolution: Winner = {market.winner}
+Match: {market_memory.team1} vs {market_memory.team2}
+Original Resolution: Winner = {market_memory.winner}
 Disputed Claim: Winner = {claimed_winner}
 
 Fresh webpage content:
-{gl.nondet.web.render(market.resolution_url, mode='text')}
+{gl.nondet.web.render(market_memory.resolution_url, mode='text')}
 
 Carefully analyze the content and determine:
 1. What is the correct winner?
