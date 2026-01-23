@@ -33,11 +33,7 @@ export function WalletButton() {
           <span className="text-sm font-mono text-gray-300 group-hover:text-white transition-colors">
             {shortenAddress(account.address)}
           </span>
-          
-          {/* Badge */}
-          <span className="px-2 py-0.5 rounded bg-warning/10 border border-warning/30 text-[10px] text-warning font-medium uppercase tracking-wide">
-            Temp
-          </span>
+         
           
           {/* Chevron */}
           <svg className={`w-4 h-4 text-gray-400 transition-transform duration-200 ${showMenu ? 'rotate-180' : ''}`} 
