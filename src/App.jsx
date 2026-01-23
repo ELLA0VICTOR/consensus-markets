@@ -1,4 +1,3 @@
-// src/App.jsx
 import { useState } from 'react';
 import { useContract } from './hooks/useContract';
 import { useFixtures } from './hooks/useFixtures';
@@ -9,7 +8,6 @@ import { BettingInterface } from './components/BettingInterface';
 import { CreateMarket } from './components/CreateMarket';
 import { FixtureList } from './components/FixtureList';
 import { MarketResolution } from './components/MarketResolution';
-import { TestMarketCreator } from './components/TestMarketCreator';
 
 function App() {
   const contractHook = useContract();
@@ -47,87 +45,6 @@ function App() {
     refreshMarkets();
   };
 
-  const handleDebugClick = async () => {
-    console.log('=== 🐛 DETAILED DEBUG INFO ===');
-    console.log('Client connected:', contractHook.isConnected);
-    console.log('Current account:', contractHook.account?.address);
-    console.log('Client object exists:', !!contractHook.client);
-    console.log('');
-    
-    try {
-      // Test market count
-      const count = await contractHook.getMarketCount();
-      console.log('📊 Total markets from contract:', count);
-      console.log('📊 Type of count:', typeof count);
-      console.log('');
-      
-      if (count > 0) {
-        console.log(`✅ Found ${count} market(s). Fetching details...`);
-        console.log('');
-        
-        for (let i = 0; i < count; i++) {
-          const market = await contractHook.getMarket(i);
-          
-          console.log(`--- Market ${i} ---`);
-          console.log('Type:', typeof market);
-          console.log('Is Map?:', market instanceof Map);
-          console.log('Is Object?:', typeof market === 'object' && !(market instanceof Map));
-          console.log('Full data:', market);
-          console.log('');
-          console.log('Field Access Tests:');
-          console.log('  ✓ market.id:', market.id, '(type:', typeof market.id, ')');
-          console.log('  ✓ market.team1:', market.team1, '(type:', typeof market.team1, ')');
-          console.log('  ✓ market.team2:', market.team2, '(type:', typeof market.team2, ')');
-          console.log('  ✓ market.league:', market.league, '(type:', typeof market.league, ')');
-          console.log('  ✓ market.status:', market.status, '(type:', typeof market.status, ')');
-          console.log('  ✓ market.odds_team1:', market.odds_team1);
-          console.log('  ✓ market.odds_draw:', market.odds_draw);
-          console.log('  ✓ market.odds_team2:', market.odds_team2);
-          console.log('  ✓ market.total_pool:', market.total_pool);
-          console.log('  ✓ market.winner:', market.winner);
-          console.log('');
-        }
-      } else {
-        console.log('⚠️ No markets found in contract!');
-        console.log('');
-        console.log('Possible reasons:');
-        console.log('1. No markets have been created yet');
-        console.log('2. Wrong contract address');
-        console.log('3. GenLayer Studio state was reset');
-        console.log('');
-      }
-      
-      console.log('--- Current UI State ---');
-      console.log('Markets array:', markets);
-      console.log('Markets count:', markets.length);
-      console.log('Markets is array?:', Array.isArray(markets));
-      
-      if (markets.length > 0) {
-        console.log('First market in UI:', markets[0]);
-        console.log('First market fields accessible?:', {
-          team1: markets[0].team1,
-          team2: markets[0].team2,
-          status: markets[0].status,
-        });
-      }
-      
-      console.log('');
-      console.log('--- Test getUserBalance ---');
-      try {
-        const balance = await contractHook.getUserBalance(contractHook.account.address);
-        console.log('✅ User balance:', balance, '(type:', typeof balance, ')');
-      } catch (err) {
-        console.error('❌ getUserBalance error:', err.message);
-      }
-      
-      console.log('=== END DEBUG ===');
-    } catch (err) {
-      console.error('❌ Debug error:', err);
-      console.error('Error message:', err.message);
-      console.error('Stack:', err.stack);
-    }
-  };
-
   const getFilteredMarkets = () => {
     if (filterStatus === 'all') return markets;
     return markets.filter(m => m.status === filterStatus);
@@ -136,183 +53,224 @@ function App() {
   const filteredMarkets = getFilteredMarkets();
 
   return (
-    <div className="min-h-screen bg-gray-900">
-      {/* Header */}
-      <header className="bg-gray-800 border-b border-gray-700">
-        <div className="max-w-7xl mx-auto px-4 py-6">
-          <div className="flex items-center justify-between mb-4">
-            <div>
-              <h1 className="text-3xl font-bold text-white">ConsensusMarkets</h1>
-              <p className="text-gray-400 mt-1">AI-Powered Sports Prediction Markets</p>
+    <div className="min-h-screen bg-black">
+      {/* === HEADER === */}
+      <header className="border-b border-white/10 bg-black/80 backdrop-blur-xl sticky top-0 z-50">
+        <div className="max-w-7xl mx-auto px-6 py-6">
+          {/* Logo & Tagline */}
+          <div className="flex items-start justify-between mb-8">
+            <div className="space-y-1">
+              <h1 className="text-4xl font-bold tracking-tight text-white" 
+                  style={{ fontFamily: "'Space Grotesk', 'Inter', sans-serif", letterSpacing: '-0.02em' }}>
+                CONSENSUS MARKETS
+              </h1>
+              <p className="text-sm text-gray-400" 
+                 style={{ fontFamily: "'JetBrains Mono', 'Courier New', monospace", letterSpacing: '0.05em' }}>
+                AI-POWERED SPORTS PREDICTION MARKETS
+              </p>
             </div>
-          </div>
-          
-          <WalletConnect contractHook={contractHook} />
-          
-          {/* Debug Button */}
-          <div className="mt-4 flex gap-3">
-            <button
-              onClick={handleDebugClick}
-              className="px-4 py-2 bg-yellow-600 hover:bg-yellow-700 text-white font-semibold rounded-lg transition-colors"
-            >
-              🐛 Debug Markets
-            </button>
-            <button
-              onClick={refreshMarkets}
-              className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white font-semibold rounded-lg transition-colors"
-            >
-              🔄 Refresh Markets
-            </button>
+            
+            {/* Market Status Indicator */}
             {markets.length > 0 && (
-              <div className="px-4 py-2 bg-green-600 text-white font-semibold rounded-lg">
-                ✅ {markets.length} market(s) loaded
+              <div className="glass-card px-4 py-2 rounded-lg">
+                <div className="flex items-center gap-2">
+                  <div className="w-2 h-2 rounded-full bg-success animate-pulse-subtle" />
+                  <span className="text-sm font-mono text-gray-300">
+                    {markets.length} {markets.length === 1 ? 'market' : 'markets'}
+                  </span>
+                </div>
               </div>
             )}
+          </div>
+          
+          {/* Wallet Connection */}
+          <WalletConnect contractHook={contractHook} />
+          
+          {/* Action Bar */}
+          <div className="mt-6 flex items-center gap-3">
+            <button
+              onClick={refreshMarkets}
+              className="group relative px-5 py-2.5 rounded-lg bg-white/5 hover:bg-white/10 
+                       border border-white/10 hover:border-white/20 transition-all duration-300
+                       text-sm font-medium text-gray-300 hover:text-white"
+            >
+              <span className="flex items-center gap-2">
+                <svg className="w-4 h-4 group-hover:rotate-180 transition-transform duration-500" 
+                     fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} 
+                        d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                </svg>
+                Refresh
+              </span>
+            </button>
           </div>
         </div>
       </header>
 
-      {/* Navigation Tabs */}
-      <div className="bg-gray-800 border-b border-gray-700">
-        <div className="max-w-7xl mx-auto px-4">
-          <div className="flex gap-4">
-            <button
-              onClick={() => setActiveTab('markets')}
-              className={`px-6 py-3 font-semibold transition-colors ${
-                activeTab === 'markets'
-                  ? 'text-blue-400 border-b-2 border-blue-400'
-                  : 'text-gray-400 hover:text-white'
-              }`}
-            >
-              Markets
-            </button>
-            <button
-              onClick={() => setActiveTab('test')}
-              className={`px-6 py-3 font-semibold transition-colors ${
-                activeTab === 'test'
-                  ? 'text-yellow-400 border-b-2 border-yellow-400'
-                  : 'text-gray-400 hover:text-white'
-              }`}
-            >
-              🧪 Quick Test
-            </button>
-            <button
-              onClick={() => setActiveTab('fixtures')}
-              className={`px-6 py-3 font-semibold transition-colors ${
-                activeTab === 'fixtures'
-                  ? 'text-blue-400 border-b-2 border-blue-400'
-                  : 'text-gray-400 hover:text-white'
-              }`}
-            >
-              Fixtures
-            </button>
-            <button
-              onClick={() => {
-                setSelectedFixture(null);
-                setActiveTab('create');
-              }}
-              className={`px-6 py-3 font-semibold transition-colors ${
-                activeTab === 'create'
-                  ? 'text-blue-400 border-b-2 border-blue-400'
-                  : 'text-gray-400 hover:text-white'
-              }`}
-            >
-              Create Market
-            </button>
-            <button
-              onClick={() => setActiveTab('bet')}
-              className={`px-6 py-3 font-semibold transition-colors ${
-                activeTab === 'bet'
-                  ? 'text-blue-400 border-b-2 border-blue-400'
-                  : 'text-gray-400 hover:text-white'
-              }`}
-              disabled={!selectedMarket}
-            >
-              Place Bet
-            </button>
+      {/* === NAVIGATION === */}
+      <nav className="border-b border-white/10 bg-gray-950/50 backdrop-blur-xl sticky top-[140px] z-40">
+        <div className="max-w-7xl mx-auto px-6">
+          <div className="flex gap-1">
+            {[
+              { 
+                id: 'markets', 
+                label: 'Markets', 
+                icon: (
+                  <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} 
+                          d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
+                  </svg>
+                )
+              },
+              { 
+                id: 'fixtures', 
+                label: 'Fixtures', 
+                icon: (
+                  <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} 
+                          d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                  </svg>
+                )
+              },
+              { 
+                id: 'create', 
+                label: 'Create', 
+                icon: (
+                  <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} 
+                          d="M12 4v16m8-8H4" />
+                  </svg>
+                )
+              },
+              { 
+                id: 'bet', 
+                label: 'Place Bet', 
+                icon: (
+                  <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} 
+                          d="M17 9V7a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2m2 4h10a2 2 0 002-2v-6a2 2 0 00-2-2H9a2 2 0 00-2 2v6a2 2 0 002 2zm7-5a2 2 0 11-4 0 2 2 0 014 0z" />
+                  </svg>
+                ),
+                disabled: !selectedMarket 
+              }
+            ].map((tab) => (
+              <button
+                key={tab.id}
+                onClick={() => {
+                  if (tab.id === 'create') {
+                    setSelectedFixture(null);
+                  }
+                  setActiveTab(tab.id);
+                }}
+                disabled={tab.disabled}
+                className={`
+                  relative px-6 py-4 text-sm font-medium transition-all duration-200
+                  ${activeTab === tab.id 
+                    ? 'text-white' 
+                    : 'text-gray-500 hover:text-gray-300'
+                  }
+                  ${tab.disabled ? 'opacity-40 cursor-not-allowed' : 'cursor-pointer'}
+                `}
+              >
+                <span className="flex items-center gap-2">
+                  {tab.icon}
+                  {tab.label}
+                </span>
+                
+                {/* Active Indicator */}
+                {activeTab === tab.id && (
+                  <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-white" />
+                )}
+              </button>
+            ))}
           </div>
         </div>
-      </div>
+      </nav>
 
-      {/* Main Content */}
-      <main className="max-w-7xl mx-auto px-4 py-8">
-        {/* Markets Tab */}
+      {/* === MAIN CONTENT === */}
+      <main className="max-w-7xl mx-auto px-6 py-12">
+        
+        {/* MARKETS TAB */}
         {activeTab === 'markets' && (
-          <div>
-            {/* Filter Buttons */}
-            <div className="flex gap-3 mb-6">
-              <button
-                onClick={() => setFilterStatus('all')}
-                className={`px-4 py-2 rounded-lg font-semibold transition-colors ${
-                  filterStatus === 'all'
-                    ? 'bg-blue-600 text-white'
-                    : 'bg-gray-800 text-gray-400 hover:bg-gray-700'
-                }`}
-              >
-                All Markets
-              </button>
-              <button
-                onClick={() => setFilterStatus('open')}
-                className={`px-4 py-2 rounded-lg font-semibold transition-colors ${
-                  filterStatus === 'open'
-                    ? 'bg-green-600 text-white'
-                    : 'bg-gray-800 text-gray-400 hover:bg-gray-700'
-                }`}
-              >
-                Open
-              </button>
-              <button
-                onClick={() => setFilterStatus('resolved')}
-                className={`px-4 py-2 rounded-lg font-semibold transition-colors ${
-                  filterStatus === 'resolved'
-                    ? 'bg-blue-600 text-white'
-                    : 'bg-gray-800 text-gray-400 hover:bg-gray-700'
-                }`}
-              >
-                Resolved
-              </button>
-              <button
-                onClick={() => setFilterStatus('disputed')}
-                className={`px-4 py-2 rounded-lg font-semibold transition-colors ${
-                  filterStatus === 'disputed'
-                    ? 'bg-red-600 text-white'
-                    : 'bg-gray-800 text-gray-400 hover:bg-gray-700'
-                }`}
-              >
-                Disputed
-              </button>
+          <div className="space-y-8 fade-in">
+            {/* Filter Bar */}
+            <div className="flex items-center gap-3">
+              {[
+                { id: 'all', label: 'All Markets', color: 'white' },
+                { id: 'open', label: 'Open', color: 'success' },
+                { id: 'resolved', label: 'Resolved', color: 'info' },
+                { id: 'disputed', label: 'Disputed', color: 'error' }
+              ].map((filter) => (
+                <button
+                  key={filter.id}
+                  onClick={() => setFilterStatus(filter.id)}
+                  className={`
+                    px-5 py-2.5 rounded-lg text-sm font-medium transition-all duration-200
+                    ${filterStatus === filter.id
+                      ? `bg-${filter.color}/10 text-${filter.color} border border-${filter.color}/30`
+                      : 'bg-white/5 text-gray-400 border border-white/10 hover:bg-white/10 hover:text-gray-300'
+                    }
+                  `}
+                >
+                  {filter.label}
+                </button>
+              ))}
             </div>
 
             {/* Markets Grid */}
             {filteredMarkets.length === 0 ? (
-              <div className="bg-gray-800 rounded-lg p-12 border border-gray-700 text-center">
-                <p className="text-gray-400 text-lg">No markets found</p>
-                <p className="text-gray-500 text-sm mt-2">Click the debug button above to check contract state</p>
-                <button
-                  onClick={() => setActiveTab('create')}
-                  className="mt-4 px-6 py-3 bg-blue-600 hover:bg-blue-700 text-white font-semibold rounded-lg transition-colors"
-                >
-                  Create First Market
-                </button>
+              <div className="glass-card rounded-2xl p-16 text-center border border-white/10">
+                <div className="max-w-md mx-auto space-y-4">
+                  <div className="w-16 h-16 mx-auto rounded-full bg-white/5 flex items-center justify-center">
+                    <svg className="w-8 h-8 text-gray-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} 
+                            d="M20 13V6a2 2 0 00-2-2H6a2 2 0 00-2 2v7m16 0v5a2 2 0 01-2 2H6a2 2 0 01-2-2v-5m16 0h-2.586a1 1 0 00-.707.293l-2.414 2.414a1 1 0 01-.707.293h-3.172a1 1 0 01-.707-.293l-2.414-2.414A1 1 0 006.586 13H4" />
+                    </svg>
+                  </div>
+                  <h3 className="text-xl font-semibold text-white">No Markets Found</h3>
+                  <p className="text-gray-400">
+                    Create the first prediction market to get started
+                  </p>
+                  <button
+                    onClick={() => setActiveTab('create')}
+                    className="mt-4 px-6 py-3 bg-white text-black rounded-lg font-medium 
+                             hover:bg-gray-100 transition-all duration-200"
+                  >
+                    Create Market
+                  </button>
+                </div>
               </div>
             ) : (
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                {filteredMarkets.map((market) => (
-                  <MarketCard
+              <div className="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-3 gap-6">
+                {filteredMarkets.map((market, idx) => (
+                  <div 
                     key={market.id}
-                    market={market}
-                    onSelect={handleMarketSelect}
-                  />
+                    className={`fade-in fade-in-delay-${Math.min(idx, 3)}`}
+                  >
+                    <MarketCard
+                      market={market}
+                      onSelect={handleMarketSelect}
+                    />
+                  </div>
                 ))}
               </div>
             )}
           </div>
         )}
 
-        {/* Fixtures Tab */}
+        {/* FIXTURES TAB */}
         {activeTab === 'fixtures' && (
-          <div>
-            <h2 className="text-2xl font-bold text-white mb-6">Upcoming Fixtures</h2>
+          <div className="fade-in space-y-6">
+            <div className="flex items-center justify-between">
+              <h2 className="text-2xl font-bold text-white tracking-tight">
+                Upcoming Fixtures
+              </h2>
+              {!fixturesLoading && (
+                <span className="text-sm text-gray-400 font-mono">
+                  {fixtures.length} available
+                </span>
+              )}
+            </div>
             <FixtureList
               fixtures={fixtures}
               onSelectFixture={handleFixtureSelect}
@@ -321,19 +279,9 @@ function App() {
           </div>
         )}
 
-        {/* Quick Test Tab */}
-        {activeTab === 'test' && (
-          <div className="max-w-4xl mx-auto">
-            <TestMarketCreator
-              contractHook={contractHook}
-              onMarketCreated={handleMarketCreated}
-            />
-          </div>
-        )}
-
-        {/* Create Market Tab */}
+        {/* CREATE MARKET TAB */}
         {activeTab === 'create' && (
-          <div className="max-w-2xl mx-auto">
+          <div className="fade-in max-w-2xl mx-auto">
             <CreateMarket
               contractHook={contractHook}
               onMarketCreated={handleMarketCreated}
@@ -342,20 +290,18 @@ function App() {
           </div>
         )}
 
-        {/* Place Bet Tab */}
+        {/* PLACE BET TAB */}
         {activeTab === 'bet' && (
-          <div className="max-w-4xl mx-auto">
+          <div className="fade-in max-w-5xl mx-auto">
             {selectedMarket ? (
-              <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                <div>
+              <div className="grid grid-cols-1 xl:grid-cols-2 gap-8">
+                <div className="space-y-6">
                   <MarketCard market={selectedMarket} />
-                  <div className="mt-6">
-                    <MarketResolution
-                      market={selectedMarket}
-                      contractHook={contractHook}
-                      onResolved={handleMarketResolved}
-                    />
-                  </div>
+                  <MarketResolution
+                    market={selectedMarket}
+                    contractHook={contractHook}
+                    onResolved={handleMarketResolved}
+                  />
                 </div>
                 <div>
                   <BettingInterface
@@ -366,25 +312,56 @@ function App() {
                 </div>
               </div>
             ) : (
-              <div className="bg-gray-800 rounded-lg p-12 border border-gray-700 text-center">
-                <p className="text-gray-400 text-lg">No market selected</p>
-                <button
-                  onClick={() => setActiveTab('markets')}
-                  className="mt-4 px-6 py-3 bg-blue-600 hover:bg-blue-700 text-white font-semibold rounded-lg transition-colors"
-                >
-                  Browse Markets
-                </button>
+              <div className="glass-card rounded-2xl p-16 text-center border border-white/10">
+                <div className="max-w-md mx-auto space-y-4">
+                  <div className="w-16 h-16 mx-auto rounded-full bg-white/5 flex items-center justify-center">
+                    <svg className="w-8 h-8 text-gray-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} 
+                            d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                    </svg>
+                  </div>
+                  <h3 className="text-xl font-semibold text-white">No Market Selected</h3>
+                  <p className="text-gray-400">
+                    Browse available markets to place a bet
+                  </p>
+                  <button
+                    onClick={() => setActiveTab('markets')}
+                    className="mt-4 px-6 py-3 bg-white text-black rounded-lg font-medium 
+                             hover:bg-gray-100 transition-all duration-200"
+                  >
+                    Browse Markets
+                  </button>
+                </div>
               </div>
             )}
           </div>
         )}
       </main>
 
-      {/* Footer */}
-      <footer className="bg-gray-800 border-t border-gray-700 mt-12">
-        <div className="max-w-7xl mx-auto px-4 py-6 text-center text-gray-400 text-sm">
-          <p>ConsensusMarkets • Built on GenLayer • AI-Powered Market Resolution</p>
-          <p className="mt-2">Play-money only • No real money involved</p>
+      {/* === FOOTER === */}
+      <footer className="mt-24 border-t border-white/10 bg-gray-950/50 backdrop-blur-xl">
+        <div className="max-w-7xl mx-auto px-6 py-8">
+          <div className="flex flex-col md:flex-row items-center justify-between gap-4">
+            <div className="text-center md:text-left">
+              <p className="text-sm text-gray-400">
+                <span className="font-semibold text-white">Consensus-Markets</span>
+                <span className="mx-2 text-gray-600">•</span>
+                Built on GenLayer
+              </p>
+              <p className="text-xs text-gray-500 mt-1">
+                AI-Powered Market Resolution • Play-money only
+              </p>
+            </div>
+            
+            <div className="flex items-center gap-6">
+              <a href="#" className="text-xs text-gray-400 hover:text-white transition-colors">
+                Documentation
+              </a>
+              <a href="#" className="text-xs text-gray-400 hover:text-white transition-colors">
+                GitHub
+              </a>
+            </div>
+          </div>
         </div>
       </footer>
     </div>
