@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { getOutcomeLabel, formatBalance } from '../utils/formatting';
+import { getOutcomeLabel } from '../utils/formatting';
 
 export function MarketResolution({ market, contractHook, onResolved }) {
   const [isResolving, setIsResolving] = useState(false);
@@ -69,8 +69,8 @@ export function MarketResolution({ market, contractHook, onResolved }) {
     setSuccess('');
 
     try {
-      const amount = await contractHook.claimWinnings(market.id);
-      setSuccess(`Claimed $${formatBalance(amount)} successfully!`);
+      await contractHook.claimWinnings(market.id);
+      setSuccess('Winnings claimed successfully! Your balance has been refreshed.');
       
       if (onResolved) {
         onResolved();
@@ -218,7 +218,7 @@ export function MarketResolution({ market, contractHook, onResolved }) {
                 />
               </div>
               <p className="mt-2 text-xs text-gray-500 leading-relaxed">
-                Risk: Lose stake if rejected • Reward: Double stake if upheld
+                Risk: Lose stake if rejected. Reward: Gain stake amount if upheld.
               </p>
             </div>
           </div>
