@@ -83,6 +83,7 @@
     color: rgb(var(--text-primary));
     font-feature-settings: 'kern' 1, 'liga' 1;
     letter-spacing: -0.01em;
+    overflow-x: hidden;
   }
   
   #root {
@@ -222,6 +223,15 @@
   
   .scrollbar-thin::-webkit-scrollbar-thumb:hover {
     background: rgb(var(--color-gray-600));
+  }
+
+  .no-scrollbar {
+    -ms-overflow-style: none;
+    scrollbar-width: none;
+  }
+
+  .no-scrollbar::-webkit-scrollbar {
+    display: none;
   }
 }
 
