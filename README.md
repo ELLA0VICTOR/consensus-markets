@@ -16,10 +16,10 @@ This repository was updated after a validation rejection caused by nondeterminis
 The contract now:
 - avoids nested nondeterministic calls during market resolution and dispute handling
 - uses `gl.storage.copy_to_memory()` before entering nondeterministic blocks
-- uses custom leader/validator flows with `gl.vm.run_nondet_unsafe(...)` for resolution and disputes
-- keeps odds generation on `gl.eq_principle.prompt_non_comparative(...)`
+- uses custom leader/validator flows with `gl.vm.run_nondet_unsafe(...)` for odds, resolution, and disputes
 - avoids storage mutation inside `get_user_balance(...)`
 - uses integer-only payout math instead of float-based payout math
+- passes `genvm-lint check contracts/prediction_market.py --json`
 
 These fixes were verified in GenLayer Studio by successfully:
 - creating a market
@@ -42,7 +42,7 @@ These fixes were verified in GenLayer Studio by successfully:
 ### Smart Contract
 - GenLayer Intelligent Contracts in Python
 - `TreeMap`, `DynArray`, `u256`, `i8`, `u16`
-- `gl.eq_principle.prompt_non_comparative(...)` for odds generation
+- `gl.nondet.exec_prompt(...)` inside `gl.vm.run_nondet_unsafe(...)` for odds generation
 - `gl.nondet.web.get(...)` + `gl.nondet.exec_prompt(...)` inside `gl.vm.run_nondet_unsafe(...)` for resolution/disputes
 
 ### Frontend
@@ -140,13 +140,22 @@ npm run build
 
 ### 1. Odds Generation
 
-Odds generation uses:
+Odds generation now uses a custom nondeterministic leader/validator pattern:
 
 ```python
-gl.eq_principle.prompt_non_comparative(...)
+gl.vm.run_nondet_unsafe(leader_fn, validator_fn)
 ```
 
-This is suitable because the output is structured and validator-reviewed without needing a second independent extraction flow.
+Inside `leader_fn()`:
+- generate structured odds with `gl.nondet.exec_prompt(...)`
+- normalize and validate the JSON result
+- fall back to deterministic default generated odds if the prompt output is invalid
+
+Inside `validator_fn()`:
+- validate the leader's returned odds deterministically
+- accept only decimal odds in the supported range with a reasonable implied probability total
+
+This keeps storage writes outside the nondeterministic context and avoids the `E025`/`E026` lint blockers caused by mixing the old convenience wrapper with market creation writes.
 
 ### 2. Market Resolution
 
@@ -238,5 +247,6 @@ Check:
 
 If you are resubmitting this project, the most accurate short summary is:
 - the rejection issue was caused by invalid nondeterministic contract structure
-- resolution/dispute flows were restructured to compliant GenLayer leader/validator patterns
+- odds, resolution, and dispute flows were restructured to compliant GenLayer leader/validator patterns
+- the repo contract now passes `genvm-lint check contracts/prediction_market.py --json`
 - the fixed contract was re-tested successfully in GenLayer Studio end to end

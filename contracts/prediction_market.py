@@ -6,6 +6,95 @@ import json
 import typing
 
 
+DEFAULT_GENERATED_ODDS = {
+    "odds_team1": "2.50",
+    "odds_draw": "3.20",
+    "odds_team2": "2.80",
+}
+
+
+def strip_code_fences(value: str) -> str:
+    return value.replace("```json", "").replace("```", "").strip()
+
+
+def parse_json_response(response: typing.Any):
+    if isinstance(response, str):
+        return json.loads(strip_code_fences(response))
+    return response
+
+
+def parse_decimal_ratio(value: str):
+    cleaned = value.strip()
+    if cleaned == "":
+        raise ValueError("Invalid odds format")
+
+    if cleaned[0] == "+":
+        cleaned = cleaned[1:]
+
+    parts = cleaned.split(".")
+    if len(parts) > 2:
+        raise ValueError("Invalid odds format")
+
+    whole = parts[0] if parts[0] != "" else "0"
+    fraction = parts[1] if len(parts) == 2 else ""
+
+    if whole.startswith("-"):
+        raise ValueError("Odds must be positive")
+    if not whole.isdigit():
+        raise ValueError("Invalid odds format")
+    if fraction != "" and not fraction.isdigit():
+        raise ValueError("Invalid odds format")
+
+    numerator = int(whole)
+    denominator = 1
+
+    if fraction != "":
+        denominator = 10 ** len(fraction)
+        numerator = (numerator * denominator) + int(fraction)
+
+    return numerator, denominator
+
+
+def validate_odds_text(value: str) -> str:
+    odds = value.strip()
+    numerator, denominator = parse_decimal_ratio(odds)
+
+    if numerator * 100 < denominator * 150:
+        raise ValueError("Odds below allowed range")
+    if numerator * 100 > denominator * 500:
+        raise ValueError("Odds above allowed range")
+
+    return odds
+
+
+def implied_probability_bps(value: str) -> int:
+    numerator, denominator = parse_decimal_ratio(value)
+    return (10000 * denominator) // numerator
+
+
+def validate_generated_odds_payload(payload: typing.Any) -> dict:
+    parsed = parse_json_response(payload)
+
+    odds_team1 = validate_odds_text(str(parsed["odds_team1"]))
+    odds_draw = validate_odds_text(str(parsed["odds_draw"]))
+    odds_team2 = validate_odds_text(str(parsed["odds_team2"]))
+
+    implied_total_bps = (
+        implied_probability_bps(odds_team1)
+        + implied_probability_bps(odds_draw)
+        + implied_probability_bps(odds_team2)
+    )
+
+    if implied_total_bps < 10000 or implied_total_bps > 12000:
+        raise ValueError("Implied probability outside accepted range")
+
+    return {
+        "odds_team1": odds_team1,
+        "odds_draw": odds_draw,
+        "odds_team2": odds_team2,
+    }
+
+
 @allow_storage
 @dataclass
 class Market:
@@ -101,45 +190,18 @@ class PredictionMarket(gl.Contract):
 
     def _strip_code_fences(self, value: str) -> str:
         """Remove markdown fences from LLM JSON responses."""
-        return value.replace("```json", "").replace("```", "").strip()
+        return strip_code_fences(value)
 
     def _parse_json_response(self, response: typing.Any):
         """Normalize prompt output into a JSON object."""
-        if isinstance(response, str):
-            return json.loads(self._strip_code_fences(response))
-        return response
+        return parse_json_response(response)
 
     def _parse_decimal_ratio(self, value: str):
         """Convert a decimal string into integer numerator / denominator."""
-        cleaned = value.strip()
-        if cleaned == "":
-            raise Exception("Invalid odds format")
-
-        if cleaned[0] == "+":
-            cleaned = cleaned[1:]
-
-        parts = cleaned.split(".")
-        if len(parts) > 2:
-            raise Exception("Invalid odds format")
-
-        whole = parts[0] if parts[0] != "" else "0"
-        fraction = parts[1] if len(parts) == 2 else ""
-
-        if whole.startswith("-"):
-            raise Exception("Odds must be positive")
-        if not whole.isdigit():
-            raise Exception("Invalid odds format")
-        if fraction != "" and not fraction.isdigit():
-            raise Exception("Invalid odds format")
-
-        numerator = int(whole)
-        denominator = 1
-
-        if fraction != "":
-            denominator = 10 ** len(fraction)
-            numerator = (numerator * denominator) + int(fraction)
-
-        return numerator, denominator
+        try:
+            return parse_decimal_ratio(value)
+        except ValueError as error:
+            raise gl.vm.UserError(str(error))
 
     def _calculate_potential_payout(self, amount: u256, odds_text: str) -> u256:
         """Compute payouts using integer math only."""
@@ -169,34 +231,41 @@ class PredictionMarket(gl.Contract):
             generate_odds: Whether to generate odds using LLM
             fixture_id: Optional fixture identifier
         """
-        creator = gl.message.sender_address
-        self._ensure_user_balance(creator)
-
         if generate_odds:
-            odds_data = self._parse_json_response(
-                gl.eq_principle.prompt_non_comparative(
-                    lambda: f"""Generate betting odds for this match:
+            def leader_fn():
+                prompt = f"""Generate betting odds for this football match.
+
 Team 1: {team1}
 Team 2: {team2}
 League: {league}
 Date: {match_date}
 
 Provide realistic decimal odds between 1.50 and 5.00.
+The total implied probability should be between 100% and 120%.
 Respond ONLY with JSON (no markdown):
 {{
   "odds_team1": "2.50",
   "odds_draw": "3.20",
   "odds_team2": "2.80"
-}}""",
-                    task="Generate realistic betting odds for this football match in JSON format",
-                    criteria="""
-                        Output must be valid JSON with keys: odds_team1, odds_draw, odds_team2
-                        All odds must be decimal strings between 1.50 and 5.00
-                        Total implied probability should be 100-110% (bookmaker margin)
-                        No markdown formatting or extra text
-                    """,
-                )
-            )
+}}"""
+
+                try:
+                    response = gl.nondet.exec_prompt(prompt, response_format="json")
+                    return validate_generated_odds_payload(response)
+                except (AttributeError, TypeError, ValueError, KeyError, json.JSONDecodeError):
+                    return DEFAULT_GENERATED_ODDS
+
+            def validator_fn(leader_result) -> bool:
+                if not isinstance(leader_result, gl.vm.Return):
+                    return False
+
+                try:
+                    validate_generated_odds_payload(leader_result.calldata)
+                    return True
+                except (AttributeError, TypeError, ValueError, KeyError, json.JSONDecodeError):
+                    return False
+
+            odds_data = gl.vm.run_nondet_unsafe(leader_fn, validator_fn)
 
             odds_team1 = odds_data["odds_team1"]
             odds_draw = odds_data["odds_draw"]
@@ -205,6 +274,9 @@ Respond ONLY with JSON (no markdown):
             odds_team1 = "2.00"
             odds_draw = "3.00"
             odds_team2 = "2.00"
+
+        creator = gl.message.sender_address
+        self._ensure_user_balance(creator)
 
         current_market_id = self.next_market_id
         market = Market(
@@ -239,13 +311,13 @@ Respond ONLY with JSON (no markdown):
             amount: Bet amount in play-money
         """
         if market_id < 0:
-            raise Exception("Invalid market id")
+            raise gl.vm.UserError("Invalid market id")
 
         if outcome < 0 or outcome > 2:
-            raise Exception("Invalid outcome")
+            raise gl.vm.UserError("Invalid outcome")
 
         if amount <= 0:
-            raise Exception("Amount must be greater than zero")
+            raise gl.vm.UserError("Amount must be greater than zero")
 
         user = gl.message.sender_address
         self._ensure_user_balance(user)
@@ -255,16 +327,16 @@ Respond ONLY with JSON (no markdown):
         amount_u256 = u256(amount)
 
         if market_id_u256 not in self.markets:
-            raise Exception("Market does not exist")
+            raise gl.vm.UserError("Market does not exist")
 
         market = self.markets[market_id_u256]
 
         if market.status != "open":
-            raise Exception("Market is not open for betting")
+            raise gl.vm.UserError("Market is not open for betting")
 
         user_balance = self.user_balances[user]
         if user_balance < amount_u256:
-            raise Exception("Insufficient balance")
+            raise gl.vm.UserError("Insufficient balance")
 
         if outcome == 0:
             odds_text = market.odds_draw
@@ -303,17 +375,17 @@ Respond ONLY with JSON (no markdown):
             market_id: ID of the market to resolve
         """
         if market_id < 0:
-            raise Exception("Invalid market id")
+            raise gl.vm.UserError("Invalid market id")
 
         market_id_u256 = u256(market_id)
 
         if market_id_u256 not in self.markets:
-            raise Exception("Market does not exist")
+            raise gl.vm.UserError("Market does not exist")
 
         market = self.markets[market_id_u256]
 
         if market.status != "open":
-            raise Exception("Market cannot be resolved")
+            raise gl.vm.UserError("Market cannot be resolved")
 
         market_memory = gl.storage.copy_to_memory(market)
         team1 = market_memory.team1
@@ -362,7 +434,7 @@ Where winner is: -1=not played, 0=draw, 1=team1, 2=team2"""
         winner = i8(result["winner"])
 
         if int(winner) == -1:
-            raise Exception("Match has not been played yet")
+            raise gl.vm.UserError("Match has not been played yet")
 
         market.winner = winner
         market.status = "resolved"
@@ -379,13 +451,13 @@ Where winner is: -1=not played, 0=draw, 1=team1, 2=team2"""
             stake: Amount to stake on the dispute
         """
         if market_id < 0:
-            raise Exception("Invalid market id")
+            raise gl.vm.UserError("Invalid market id")
 
         if claimed_winner < 0 or claimed_winner > 2:
-            raise Exception("Invalid claimed winner")
+            raise gl.vm.UserError("Invalid claimed winner")
 
         if stake <= 0:
-            raise Exception("Stake must be greater than zero")
+            raise gl.vm.UserError("Stake must be greater than zero")
 
         user = gl.message.sender_address
 
@@ -394,19 +466,19 @@ Where winner is: -1=not played, 0=draw, 1=team1, 2=team2"""
         stake_u256 = u256(stake)
 
         if market_id_u256 not in self.markets:
-            raise Exception("Market does not exist")
+            raise gl.vm.UserError("Market does not exist")
 
         market = self.markets[market_id_u256]
 
         if market.status != "resolved":
-            raise Exception("Can only dispute resolved markets")
+            raise gl.vm.UserError("Can only dispute resolved markets")
 
         if market_id_u256 in self.disputes:
-            raise Exception("Market already disputed")
+            raise gl.vm.UserError("Market already disputed")
 
         user_balance = self._get_user_balance_or_default(user)
         if user_balance < stake_u256:
-            raise Exception("Insufficient balance for stake")
+            raise gl.vm.UserError("Insufficient balance for stake")
 
         dispute = Dispute(
             disputer=user,
@@ -489,7 +561,7 @@ Where correct_winner is: -1=not played, 0=draw, 1=team1, 2=team2"""
             market_id: ID of the market to claim from
         """
         if market_id < 0:
-            raise Exception("Invalid market id")
+            raise gl.vm.UserError("Invalid market id")
 
         user = gl.message.sender_address
         self._ensure_user_balance(user)
@@ -497,12 +569,12 @@ Where correct_winner is: -1=not played, 0=draw, 1=team1, 2=team2"""
         market_id_u256 = u256(market_id)
 
         if market_id_u256 not in self.markets:
-            raise Exception("Market does not exist")
+            raise gl.vm.UserError("Market does not exist")
 
         market = self.markets[market_id_u256]
 
         if market.status != "resolved":
-            raise Exception("Market not resolved yet")
+            raise gl.vm.UserError("Market not resolved yet")
 
         market_bets = self.bets[market_id_u256]
         total_winnings = u256(0)
@@ -520,7 +592,7 @@ Where correct_winner is: -1=not played, 0=draw, 1=team1, 2=team2"""
                 market_bets[i] = bet
 
         if total_winnings == 0:
-            raise Exception("No winnings to claim")
+            raise gl.vm.UserError("No winnings to claim")
 
         self.bets[market_id_u256] = market_bets
         self.user_balances[user] = self.user_balances[user] + total_winnings
